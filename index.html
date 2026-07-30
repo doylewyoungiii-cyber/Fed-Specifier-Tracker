@@ -206,6 +206,7 @@ try{S=JSON.parse(localStorage.getItem(LSK))}catch(e){}
 if(!S||!S.firms){S=seedState();}
 S.settings=Object.assign({green:14,yellow:30,owner:"doylewyoungiii-cyber",
   repo:"xtralight-ceu-targets",branch:"main",remember:false,me:"DWY"},S.settings||{});
+S.imports=S.imports||[]; S.firms.forEach(f=>{f.notes=f.notes||[];});
 let TOKEN=S.token||"";
 
 function save(){
@@ -329,12 +330,15 @@ V.targets=function(){
    <select id="fu"><option value="">All statuses</option>${STATUSES.map(s=>`<option ${TF.status===s?"selected":""}>${s}</option>`).join("")}</select>
    <button class="b" id="addFirm">+ Add target</button></div>
   <div class="muted" style="margin-bottom:6px">${out.length} of ${S.firms.length} firms</div>
+  <div id="selBar"></div>
   <div class="card" style="padding:6px 10px"><table><thead><tr>
+  <th style="width:26px"><input type="checkbox" class="chk" id="selAll"></th>
   <th data-k="state">St</th><th data-k="firm">Firm</th><th data-k="city" class="hidemob">HQ</th>
   <th data-k="fit">Fit</th><th data-k="tier">Tier</th><th data-k="status">Status</th>
   <th class="hidemob">Cadence</th><th data-k="rep" class="hidemob">Rep</th><th data-k="next" class="hidemob">Next action</th>
   </tr></thead><tbody>
   ${out.map(f=>{const fl=flag(f);return `<tr class="rw">
+   <td><input type="checkbox" class="chk selRow" data-id="${esc(f.id)}" ${SEL.has(f.id)?"checked":""}></td>
    <td>${esc(f.state)}</td><td><a onclick="go('${esc(f.id)}')">${esc(f.firm)}</a></td>
    <td class="hidemob muted">${esc(f.city)}</td><td>${esc(f.fit)}</td>
    <td class="${tc[f.tier]||""}">${esc(f.tier.replace("Tier ","T"))}</td>
@@ -348,7 +352,34 @@ V.targets=function(){
   document.querySelectorAll("th[data-k]").forEach(th=>th.addEventListener("click",()=>{
     const k=th.dataset.k; if(sortK===k)sortAsc=!sortAsc;else{sortK=k;sortAsc=true;} V.targets();}));
   document.getElementById("addFirm").addEventListener("click",openAdd);
+  document.getElementById("selAll").addEventListener("change",e=>{
+    out.forEach(f=>e.target.checked?SEL.add(f.id):SEL.delete(f.id));V.targets();});
+  document.querySelectorAll(".selRow").forEach(c=>c.addEventListener("change",()=>{
+    c.checked?SEL.add(c.dataset.id):SEL.delete(c.dataset.id);selBar();}));
+  selBar();
 };
+
+let SEL=new Set();
+function selBar(){
+  const el=document.getElementById("selBar"); if(!el)return;
+  if(!SEL.size){el.innerHTML="";return;}
+  el.innerHTML=`<div class="card" style="padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  <b>${SEL.size} selected</b>
+  <button class="ghost" id="selExp">\u2913 Export selected CSV</button>
+  <button class="danger" id="selDel">Delete selected</button>
+  <a id="selClr">Clear</a></div>`;
+  document.getElementById("selClr").addEventListener("click",()=>{SEL.clear();V.targets();});
+  document.getElementById("selExp").addEventListener("click",()=>{
+    const list=S.firms.filter(f=>SEL.has(f.id));
+    dl("selected-targets.csv",toCSV(list),"text/csv");});
+  document.getElementById("selDel").addEventListener("click",()=>{
+    if(!confirm("Delete "+SEL.size+" firm(s) plus their notes, to-dos and events? Export them first if you need to fix and re-import."))return;
+    S.firms=S.firms.filter(f=>!SEL.has(f.id));
+    S.todos=S.todos.filter(t=>!SEL.has(t.firmId));
+    S.events=S.events.filter(e=>!SEL.has(e.firmId));
+    SEL.clear();save();V.targets();
+    stamp("Deleted \u00B7 "+(USER?"live-synced":"saved locally"),"ok");});
+}
 
 window.go=id=>{location.hash="#/firm/"+encodeURIComponent(id);};
 
@@ -587,6 +618,16 @@ V.settings=function(){
   <div class="card"><h3>Cadence thresholds</h3>
   <div class="form"><div class="fld"><label>Green \u2264 days</label><input id="sG" type="number" value="${st.green}"></div>
   <div class="fld"><label>Yellow \u2264 days</label><input id="sY" type="number" value="${st.yellow}"></div></div></div>
+  <div class="card"><h3>Import history</h3>
+  <div class="help">Every bulk import is a batch \u2014 remove a batch to undo a bad import. Firms added
+  singly or shipped with the app are untouched.</div>
+  <div style="margin-top:8px">
+  ${(S.imports||[]).slice().reverse().map(b=>{const left=S.firms.filter(f=>f.batch===b.id).length;
+    return `<div class="frow"><span class="pill">${esc(b.ts)}</span><span>${esc(b.label)}</span>
+    <span class="muted">${b.count} imported \u00B7 ${left} still in list</span>
+    ${left?`<button class="danger" data-ib="${b.id}">Remove ${left}</button>`:'<span class="muted">cleared</span>'}</div>`;}).join("")
+    ||'<div class="muted">No bulk imports yet.</div>'}
+  </div></div>
   <div class="card"><h3>Move data between devices</h3>
   <div class="help">Download a backup here, restore it on the other device \u2014 or just use cloud sync above.</div>
   <div style="display:flex;gap:8px;margin-top:8px">
@@ -600,6 +641,13 @@ V.settings=function(){
   bind("sG","green",1);bind("sY","yellow",1);
   document.getElementById("sToken").addEventListener("input",e=>{TOKEN=e.target.value.trim();save();});
   document.getElementById("sRem").addEventListener("change",e=>{st.remember=e.target.checked;save();});
+  document.querySelectorAll("[data-ib]").forEach(b=>b.addEventListener("click",()=>{
+    const ids=new Set(S.firms.filter(f=>f.batch===b.dataset.ib).map(f=>f.id));
+    if(!confirm("Remove "+ids.size+" firm(s) from this import, plus their notes/to-dos/events?"))return;
+    S.firms=S.firms.filter(f=>f.batch!==b.dataset.ib);
+    S.todos=S.todos.filter(t=>!ids.has(t.firmId));
+    S.events=S.events.filter(e=>!ids.has(e.firmId));
+    save();V.settings();stamp("Import removed \u00B7 "+(USER?"live-synced":"saved locally"),"ok");}));
   document.getElementById("bk").addEventListener("click",()=>
     dl("prospect-os-backup.json",JSON.stringify(S,null,1),"application/json"));
   document.getElementById("rs").addEventListener("click",()=>document.getElementById("rsf").click());
@@ -638,13 +686,13 @@ V.guide=function(){
 
 /* ================= cloud sync ================= */
 function csvCell(v){v=String(v??"");return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
-function toCSV(){
+function toCSV(list){
   const hdr=["State (HQ)","Firm","HQ City","Firm Type","Website","Gov Sector Strengths",
   "2025 Standing / Source","CEU Fit","Priority","Angle / Entry Notes","Assigned Rep Agency",
   "Status","Course to Book","Target Office / City","Contact Name","Contact Title",
   "Contact Email / Phone","Outreach Date","L&L Date","Next Action","Notes"];
   const rows=[hdr];
-  S.firms.slice().sort((a,b)=>(a.state+a.firm).localeCompare(b.state+b.firm)).forEach(f=>{
+  (list||S.firms).slice().sort((a,b)=>(a.state+a.firm).localeCompare(b.state+b.firm)).forEach(f=>{
     const n=f.notes[f.notes.length-1];
     rows.push([f.state,f.firm,f.city,f.type,f.website,f.strengths,f.standing,f.fit,f.tier,
       f.angle,f.rep,f.status,f.course,f.office,f.contact,f.title,f.email,f.outreach,
@@ -778,10 +826,13 @@ function bindAdd(){
     <button class="b" id="bGo" style="margin-top:10px">Import</button>`;
     document.getElementById("bGo").addEventListener("click",()=>{
       let added=0,updated=0;const upd=document.getElementById("bUpd").checked;
+      const bid="b"+Date.now();
+      const label=(document.getElementById("bFile").files[0]&&document.getElementById("bFile").files[0].name)||"pasted rows";
       BULK.forEach(o=>{const ex=firm(fid(o));
         if(ex){if(upd){Object.entries(o).forEach(([k,v])=>{
           if(v&&k!=="notes"&&k!=="firm"&&k!=="state")ex[k]=v;});updated++;}return;}
-        S.firms.push(newFirm(o));added++;});
+        const nf=newFirm(o);nf.batch=bid;S.firms.push(nf);added++;});
+      if(added)S.imports.push({id:bid,ts:new Date().toLocaleString(),label,count:added});
       save();$("addm").style.display="none";$("bPrev").innerHTML="";$("bTxt").value="";$("bFile").value="";
       stamp(`Imported ${added} new${upd&&updated?", updated "+updated:""}${USER?" \u00B7 live-synced":""}`,"ok");
       if((location.hash||"").includes("targets"))V.targets();else location.hash="#/targets";});
