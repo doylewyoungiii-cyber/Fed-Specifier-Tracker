@@ -186,6 +186,42 @@ Data syncs live across all signed-in devices.</div>
 <div style="margin-top:8px;text-align:center"><a id="lgSkip">Use local-only on this device</a></div>
 </div></div>
 
+<div id="addm" style="display:none;position:fixed;inset:0;background:rgba(10,12,15,.93);z-index:40;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 12px">
+<div class="card" style="width:780px;max-width:96vw">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<h3 style="margin:0">ADD TARGETS</h3><span class="x" id="amX" style="font-size:20px">&#215;</span></div>
+<div style="display:flex;gap:8px;margin-bottom:12px">
+<button class="b" id="amTab1">Single target</button>
+<button class="ghost" id="amTab2">Bulk import</button></div>
+<div id="amSingle">
+<div class="form">
+<div class="fld"><label>State (HQ) *</label><input id="aState" placeholder="FL"></div>
+<div class="fld"><label>Firm *</label><input id="aFirm"></div>
+<div class="fld"><label>HQ city</label><input id="aCity"></div>
+<div class="fld"><label>Firm type</label><input id="aType" placeholder="MEP Engineering"></div>
+<div class="fld"><label>Website</label><input id="aWeb" placeholder="firm.com"></div>
+<div class="fld"><label>Tier</label><select id="aTier"><option>Tier 1</option><option selected>Tier 2</option><option>Tier 3</option></select></div>
+<div class="fld"><label>CEU fit</label><select id="aFit"><option>FED</option><option>COR</option><option>FED+COR</option></select></div>
+<div class="fld"><label>Rep agency</label><input id="aRep"></div>
+<div class="fld wide"><label>Angle / entry notes</label><input id="aAngle"></div>
+</div>
+<div id="aErr" class="sync err" style="margin-top:6px"></div>
+<button class="b" style="margin-top:10px" id="aGo">Add target</button>
+</div>
+<div id="amBulk" style="display:none">
+<div class="help">Paste rows copied from Excel (tab-separated) or CSV text &mdash; or choose a .csv file.
+Minimal columns in order: <b>State, Firm, City, Website, Tier, Fit</b>. A header row is detected
+automatically, and full 21-column exports from this app or the repo CSV import as-is.</div>
+<textarea id="bTxt" style="margin-top:8px;min-height:110px" placeholder="FL, TLC Engineering Solutions, Orlando, tlc-engineers.com, Tier 1, FED"></textarea>
+<div style="display:flex;gap:10px;margin-top:8px;align-items:center;flex-wrap:wrap">
+<input type="file" id="bFile" accept=".csv,.txt" style="width:auto">
+<button class="b" id="bParse">Preview</button>
+<label style="font-size:12px;text-transform:none"><input type="checkbox" class="chk" id="bUpd"> Update existing firms with imported values</label>
+</div>
+<div id="bPrev" style="margin-top:10px"></div>
+</div>
+</div></div>
+
 <script>
 /* ================= data ================= */
 const SEED = __DATA__;
@@ -355,13 +391,7 @@ V.targets=function(){
     document.getElementById(id).addEventListener("change",e=>{TF[k]=e.target.value;V.targets();}));
   document.querySelectorAll("th[data-k]").forEach(th=>th.addEventListener("click",()=>{
     const k=th.dataset.k; if(sortK===k)sortAsc=!sortAsc;else{sortK=k;sortAsc=true;} V.targets();}));
-  document.getElementById("addFirm").addEventListener("click",()=>{
-    const name=prompt("Firm name?"); if(!name)return;
-    const st=prompt("HQ state (e.g. FL)?")||"";
-    const nf={state:st,firm:name,city:"",type:"",website:"",strengths:"",standing:"",fit:"FED",
-      tier:"Tier 2",angle:"",rep:"",status:"Not Started",course:"",office:"",contact:"",title:"",
-      email:"",outreach:"",lldate:"",next:"",notes:[],lastTouch:"",nextSched:"",champion:""};
-    nf.id=fid(nf); S.firms.push(nf); save(); go(nf.id);});
+  document.getElementById("addFirm").addEventListener("click",openAdd);
 };
 
 window.go=id=>{location.hash="#/firm/"+encodeURIComponent(id);};
@@ -712,6 +742,96 @@ function dl(name,content,type){
   a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
 
+/* ================= add / import targets ================= */
+const HDRMAP={"state":"state","state (hq)":"state","firm":"firm","hq city":"city","city":"city",
+"firm type":"type","type":"type","website":"website","gov sector strengths":"strengths","strengths":"strengths",
+"2025 standing / source":"standing","2025 standing":"standing","standing":"standing","ceu fit":"fit","fit":"fit",
+"priority":"tier","tier":"tier","angle / entry notes":"angle","angle":"angle","assigned rep agency":"rep",
+"rep agency":"rep","rep":"rep","status":"status","course to book":"course","course":"course",
+"target office / city":"office","office":"office","contact name":"contact","contact":"contact",
+"contact title":"title","title":"title","contact email / phone":"email","email / phone":"email","email":"email",
+"outreach date":"outreach","outreach":"outreach","l&l date":"lldate","ll date":"lldate",
+"next action":"next","next":"next","notes":"notes","latest note":"notes"};
+function parseCSV(text){const rows=[[""]];let r=0,c=0,q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){if(ch==='"'){if(text[i+1]==='"'){rows[r][c]+='"';i++;}else q=false;}else rows[r][c]+=ch;}
+    else{if(ch==='"')q=true;else if(ch===','){rows[r].push("");c++;}
+      else if(ch==='\n'){rows.push([""]);r++;c=0;}else if(ch!=='\r')rows[r][c]+=ch;}}
+  if(rows.length&&rows[rows.length-1].length===1&&rows[rows.length-1][0]==="")rows.pop();
+  return rows;}
+function parseBulk(text){
+  text=text.replace(/\r\n/g,"\n").trim(); if(!text)return [];
+  let grid;
+  if(text.includes("\t"))grid=text.split("\n").map(l=>l.split("\t").map(s=>s.trim()));
+  else grid=parseCSV(text);
+  if(!grid.length)return [];
+  let cols=["state","firm","city","website","tier","fit"],start=0;
+  const h=grid[0].map(x=>String(x).toLowerCase().trim());
+  if(h.some(x=>HDRMAP[x]==="firm")){cols=h.map(x=>HDRMAP[x]||null);start=1;}
+  const out=[];
+  for(let i=start;i<grid.length;i++){const row=grid[i];const o={};
+    cols.forEach((k,j)=>{if(k&&row[j]!==undefined)o[k]=String(row[j]).trim();});
+    if(!o.firm)continue;
+    o.state=(o.state||"").toUpperCase()||"??";
+    if(o.tier&&!/^Tier /i.test(o.tier))o.tier="Tier "+o.tier.replace(/^T/i,"");
+    out.push(o);}
+  return out;}
+function newFirm(o){
+  const f={state:"",firm:"",city:"",type:"",website:"",strengths:"",standing:"",fit:"FED",tier:"Tier 2",
+    angle:"",rep:"",status:"Not Started",course:"",office:"",contact:"",title:"",email:"",outreach:"",
+    lldate:"",next:"",lastTouch:"",nextSched:"",champion:"",notes:[]};
+  Object.entries(o).forEach(([k,v])=>{if(v&&k!=="notes")f[k]=v;});
+  if(o.notes)f.notes=[{d:today(),who:S.settings.me,what:o.notes,next:""}];
+  if(!STATUSES.includes(f.status))f.status="Not Started";
+  if(!["Tier 1","Tier 2","Tier 3"].includes(f.tier))f.tier="Tier 2";
+  f.id=fid(f);return f;}
+let BULK=[];
+function openAdd(){document.getElementById("addm").style.display="flex";}
+function bindAdd(){
+  const $=id=>document.getElementById(id);
+  $("amX").addEventListener("click",()=>$("addm").style.display="none");
+  $("amTab1").addEventListener("click",()=>{$("amSingle").style.display="";$("amBulk").style.display="none";
+    $("amTab1").className="b";$("amTab2").className="ghost";});
+  $("amTab2").addEventListener("click",()=>{$("amSingle").style.display="none";$("amBulk").style.display="";
+    $("amTab2").className="b";$("amTab1").className="ghost";});
+  $("aGo").addEventListener("click",()=>{
+    const o={state:$("aState").value.trim().toUpperCase(),firm:$("aFirm").value.trim(),
+      city:$("aCity").value.trim(),type:$("aType").value.trim(),website:$("aWeb").value.trim(),
+      tier:$("aTier").value,fit:$("aFit").value,rep:$("aRep").value.trim(),angle:$("aAngle").value.trim()};
+    if(!o.firm||!o.state){$("aErr").textContent="State and firm are required.";return;}
+    const f=newFirm(o);
+    if(firm(f.id)){$("aErr").textContent="Already in the list: "+f.firm+" ("+f.state+").";return;}
+    S.firms.push(f);save();
+    ["aState","aFirm","aCity","aType","aWeb","aRep","aAngle"].forEach(i=>$(i).value="");
+    $("aErr").textContent="";$("addm").style.display="none";go(f.id);});
+  $("bFile").addEventListener("change",e=>{const fl=e.target.files[0];if(!fl)return;
+    const rd=new FileReader();rd.onload=()=>{$("bTxt").value=rd.result;preview();};rd.readAsText(fl);});
+  $("bParse").addEventListener("click",preview);
+  function preview(){
+    BULK=parseBulk($("bTxt").value);
+    if(!BULK.length){$("bPrev").innerHTML='<div class="muted">Nothing parsed \u2014 check the format.</div>';return;}
+    const dups=BULK.filter(o=>firm(fid(o))).length;
+    $("bPrev").innerHTML=`<div class="muted" style="margin-bottom:6px">${BULK.length} rows parsed \u00B7
+      ${BULK.length-dups} new \u00B7 ${dups} already in list</div>
+    <div style="max-height:220px;overflow:auto"><table><thead><tr>
+    <th>St</th><th>Firm</th><th>City</th><th>Tier</th><th>Fit</th><th></th></tr></thead><tbody>
+    ${BULK.slice(0,100).map(o=>`<tr><td>${esc(o.state)}</td><td>${esc(o.firm)}</td><td>${esc(o.city||"")}</td>
+     <td>${esc(o.tier||"Tier 2")}</td><td>${esc(o.fit||"FED")}</td>
+     <td>${firm(fid(o))?'<span class="badge b-gold">exists</span>':'<span class="badge b-green">new</span>'}</td></tr>`).join("")}
+    </tbody></table></div>
+    <button class="b" id="bGo" style="margin-top:10px">Import</button>`;
+    document.getElementById("bGo").addEventListener("click",()=>{
+      let added=0,updated=0;const upd=document.getElementById("bUpd").checked;
+      BULK.forEach(o=>{const ex=firm(fid(o));
+        if(ex){if(upd){Object.entries(o).forEach(([k,v])=>{
+          if(v&&k!=="notes"&&k!=="firm"&&k!=="state")ex[k]=v;});updated++;}return;}
+        S.firms.push(newFirm(o));added++;});
+      save();$("addm").style.display="none";$("bPrev").innerHTML="";$("bTxt").value="";$("bFile").value="";
+      stamp(`Imported ${added} new${upd&&updated?", updated "+updated:""}${USER?" \u00B7 live-synced":""}`,"ok");
+      if((location.hash||"").includes("targets"))V.targets();else location.hash="#/targets";});
+  }
+}
+
 /* ================= Firebase live sync (same project as Channel OS) ================= */
 const FB_CONFIG={apiKey:"AIzaSyBArCz3EwRoroQiz8TmlvXP0LiraYoUFD4",
 authDomain:"agent-dashboard-95a62.firebaseapp.com",projectId:"agent-dashboard-95a62",
@@ -786,6 +906,7 @@ document.getElementById("lgSkip").addEventListener("click",()=>{
   localStorage.setItem("pos_localonly","1");showLogin(false);syncUI();});
 stamp("Local data \u00B7 autosaves as you type");
 render();
+bindAdd();
 bootFB(Date.now());
 </script>
 </body>
