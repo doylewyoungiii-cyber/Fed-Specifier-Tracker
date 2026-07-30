@@ -50,6 +50,23 @@ commit that touches `data/` or `scripts/`, then commits the fresh workbook back 
 **The rule that keeps this alive:** never edit the CSV and the workbook in parallel. One surface
 at a time, sync, commit. Two sources of truth = dead dashboard.
 
+## Branded web dashboard (index.html)
+
+`scripts/build_site.py` generates **index.html** — a self-contained, XtraLight-branded dashboard
+(KPIs, status funnel, searchable/filterable target table with click-to-expand detail). The GitHub
+Action rebuilds it on every commit alongside the workbook. Data and logo are embedded, so the file
+works anywhere with zero dependencies.
+
+**Two ways to view it:**
+1. **Download and open.** Grab `index.html` from the repo and double-click it. Works offline,
+   works on a phone. This is the private option.
+2. **GitHub Pages.** Settings → Pages → Deploy from branch → `main` / `(root)`. Your dashboard gets
+   a URL you can open from anywhere. **Privacy warning:** on Free and Pro plans, a Pages site is
+   publicly reachable by anyone with the URL even when the repo is private — access-controlled Pages
+   requires GitHub Enterprise Cloud. This file contains sales strategy; the page carries a
+   `noindex` tag, but do not enable Pages unless you accept that exposure or have Enterprise
+   access controls.
+
 ## Local build
 
 ```bash
