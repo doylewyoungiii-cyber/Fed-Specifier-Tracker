@@ -53,19 +53,27 @@ at a time, sync, commit. Two sources of truth = dead dashboard.
 ## Branded web dashboard (index.html)
 
 `scripts/build_site.py` generates **index.html** — a self-contained, XtraLight-branded dashboard
-(KPIs, status funnel, searchable/filterable target table with click-to-expand detail). The GitHub
-Action rebuilds it on every commit alongside the workbook. Data and logo are embedded, so the file
-works anywhere with zero dependencies.
+(KPIs, status funnel, searchable/filterable target table). **Every firm expands into an editable
+field-notes form** (status, rep, contacts, dates, next action, notes). Edits save on the device as
+you type — they survive refresh and work offline — then **Commit changes** pushes them into
+`data/targets.csv` through the GitHub API, which triggers the Action to rebuild the workbook and
+this page. Notes taken on the road show up everywhere.
+
+**One-time sync setup (per device):** create a fine-grained personal access token
+(GitHub → Settings → Developer settings → Fine-grained tokens) with Repository access = only this
+repo and Contents = Read and write. Open the dashboard → ⚙ Setup → enter owner, repo, and token.
+Treat the token like a password; set an expiration and revoke it if a device is lost. Without a
+token, notes still save locally and can be committed later.
 
 **Two ways to view it:**
-1. **Download and open.** Grab `index.html` from the repo and double-click it. Works offline,
+1. **Download and open.** Grab `index.html` from the repo and open it. Works offline,
    works on a phone. This is the private option.
 2. **GitHub Pages.** Settings → Pages → Deploy from branch → `main` / `(root)`. Your dashboard gets
    a URL you can open from anywhere. **Privacy warning:** on Free and Pro plans, a Pages site is
    publicly reachable by anyone with the URL even when the repo is private — access-controlled Pages
    requires GitHub Enterprise Cloud. This file contains sales strategy; the page carries a
    `noindex` tag, but do not enable Pages unless you accept that exposure or have Enterprise
-   access controls.
+   access controls. (Your token is never in the page or the repo — it stays in your browser.)
 
 ## Local build
 
