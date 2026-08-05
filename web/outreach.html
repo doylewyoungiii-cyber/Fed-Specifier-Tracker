@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prospect OS · Outreach</title>
+<style>
+  :root{--ink:#16211c;--paper:#f7f6f2;--card:#fff;--line:#e3e1d9;
+        --blue:#0079C1;--green:#5D9732;--gold:#C49F06;--muted:#6f6d66}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:15px/1.55 "Avenir Next","Helvetica Neue",Arial,sans-serif}
+  a{color:var(--blue);text-decoration:none}
+  header{display:flex;align-items:center;gap:22px;padding:14px 22px;
+         border-bottom:3px solid var(--ink);background:var(--card);flex-wrap:wrap}
+  .brand{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:14px}
+  .brand b{color:var(--blue)}
+  nav button{background:none;border:none;font:inherit;font-size:14px;cursor:pointer;
+             padding:4px 2px;margin-right:14px;color:var(--ink)}
+  nav button.on{border-bottom:2px solid var(--blue);font-weight:600}
+  #who{margin-left:auto;font-size:12.5px;color:var(--muted)}
+  main{max-width:1020px;margin:22px auto;padding:0 20px}
+  h1{font-size:20px;margin:0 0 14px}
+  h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.09em;
+     color:var(--muted);margin:24px 0 8px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+  .card .n{font:600 28px/1 "SF Mono",Menlo,monospace}
+  .card .l{color:var(--muted);font-size:12px;margin-top:4px}
+  table{width:100%;border-collapse:collapse;background:var(--card);
+        border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;text-align:left;
+     color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:"SF Mono",Menlo,monospace;font-size:12px}
+  .btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:4px;
+       padding:6px 13px;font-size:13px;cursor:pointer}
+  .btn.quiet{background:transparent;color:var(--ink)}
+  .btn.blue{background:var(--blue);border-color:var(--blue)}
+  textarea,input[type=text],input[type=number],input[type=time]{width:100%;
+       border:1px solid var(--line);border-radius:4px;padding:7px;
+       font:13px/1.5 "Avenir Next",Arial,sans-serif;background:#fffdf8}
+  textarea{min-height:140px}
+  .draft{background:var(--card);border:1px solid var(--line);border-radius:6px;
+         padding:14px 16px;margin-bottom:14px}
+  .who{font-weight:600}
+  .tag{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:10px;
+       background:#eef4fa;color:var(--blue);margin-left:6px;
+       font-family:"SF Mono",Menlo,monospace}
+  .empty{color:var(--muted);padding:30px;text-align:center;background:var(--card);
+         border:1px dashed var(--line);border-radius:6px}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row>label{flex:1;min-width:200px;font-size:12.5px;color:var(--muted)}
+  #gate{max-width:380px;margin:90px auto;text-align:center}
+  .note{font-size:12.5px;color:var(--muted)}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+         background:var(--ink);color:#fff;border-radius:6px;padding:9px 18px;
+         font-size:13px;display:none}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<header class="hidden" id="topbar">
+  <span class="brand">Prospect<b>·OS</b>&nbsp;<span style="color:var(--muted);font-weight:400">Outreach</span></span>
+  <nav id="nav"></nav>
+  <span id="who"></span>
+</header>
+
+<div id="gate">
+  <p class="brand" style="font-size:16px">Prospect<b style="color:var(--blue)">·OS</b> Outreach</p>
+  <p class="note">Sign in with the Google account that owns the Firebase project.</p>
+  <button class="btn blue" id="signin">Sign in with Google</button>
+</div>
+
+<main class="hidden" id="app"></main>
+<div id="toast"></div>
+
+<script type="module">
+/* ============================================================
+   1. PASTE YOUR FIREBASE CONFIG (Console → Project settings →
+      Your apps → SDK setup and configuration → Config)
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "PASTE_ME",
+  authDomain: "agent-dashboard-95a62.firebaseapp.com",
+  projectId: "agent-dashboard-95a62",
+  storageBucket: "agent-dashboard-95a62.appspot.com",
+  messagingSenderId: "PASTE_ME",
+  appId: "PASTE_ME",
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection,
+         query, where, orderBy, limit, onSnapshot, getDocs,
+         getCountFromServer, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFunctions, httpsCallable }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+
+const fb = initializeApp(firebaseConfig);
+const auth = getAuth(fb);
+const dbase = getFirestore(fb);
+const fns = getFunctions(fb, "us-central1");
+const call = (name) => httpsCallable(fns, name);
+
+const $ = (s) => document.querySelector(s);
+const el = (h) => { const t = document.createElement("template"); t.innerHTML = h.trim(); return t.content.firstChild; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.style.display="block";
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", 3200); }
+
+/* ------------------------------ auth gate ------------------------------ */
+$("#signin").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(e=>toast(e.message));
+onAuthStateChanged(auth, (user) => {
+  if (!user) { $("#gate").classList.remove("hidden"); $("#topbar").classList.add("hidden");
+               $("#app").classList.add("hidden"); return; }
+  $("#gate").classList.add("hidden"); $("#topbar").classList.remove("hidden");
+  $("#app").classList.remove("hidden");
+  $("#who").innerHTML = `${esc(user.email)} · <a href="#" id="out">sign out</a>`;
+  $("#out").onclick = (e)=>{e.preventDefault(); signOut(auth);};
+  show("dashboard");
+});
+
+/* ------------------------------ navigation ----------------------------- */
+const TABS = [["dashboard","Dashboard"],["queue","Approval queue"],
+              ["responses","Needs response"],["reports","Reports"],["settings","Settings"]];
+$("#nav").append(...TABS.map(([id,label]) =>
+  el(`<button data-t="${id}">${label}</button>`)));
+$("#nav").onclick = (e)=>{ if(e.target.dataset.t) show(e.target.dataset.t); };
+let unsub = [];
+function show(tab){
+  unsub.forEach(u=>u()); unsub=[];
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on", b.dataset.t===tab));
+  $("#app").innerHTML="";
+  ({dashboard, queue, responses, reports, settings})[tab]();
+}
+const C = (name)=>collection(dbase, name);
+const cnt = async (q)=> (await getCountFromServer(q)).data().count;
+
+/* ------------------------------ dashboard ------------------------------ */
+async function dashboard(){
+  $("#app").innerHTML = `<h1>Dashboard</h1><div class="cards" id="cards"></div>
+    <h2>Roster</h2>
+    <div class="card row" style="align-items:center">
+      <input type="file" id="csv" accept=".csv" style="flex:2">
+      <button class="btn quiet" id="doImport">Import CSV</button>
+      <button class="btn blue" id="doEnroll">Enroll roster in ceu_intro</button>
+    </div>
+    <h2>Recent activity</h2><div id="act"></div>`;
+  const [contacts, active, drafts, needs, booked] = await Promise.all([
+    cnt(C("outreach_contacts")),
+    cnt(query(C("outreach_enrollments"), where("status","==","active"))),
+    cnt(query(C("outreach_sends"), where("status","==","draft"))),
+    cnt(query(C("outreach_replies"), where("classification","==","replied"), where("handled","==",false))),
+    cnt(C("outreach_meetings")),
+  ]);
+  const cfgSnap = await getDoc(doc(dbase,"outreach_settings/config"));
+  const goal = cfgSnap.exists()? (cfgSnap.data().sessionGoal||12) : 12;
+  $("#cards").append(
+    el(`<div class="card"><div class="n">${contacts}</div><div class="l">contacts on roster</div></div>`),
+    el(`<div class="card"><div class="n">${active}</div><div class="l">active in sequence</div></div>`),
+    el(`<div class="card"><div class="n">${drafts}</div><div class="l">awaiting your approval</div></div>`),
+    el(`<div class="card"><div class="n">${needs}</div><div class="l">replies needing you</div></div>`),
+    el(`<div class="card"><div class="n">${booked}/${goal}</div><div class="l">sessions booked vs goal</div></div>`));
+  unsub.push(onSnapshot(query(C("outreach_log"), orderBy("ts","desc"), limit(20)), (snap)=>{
+    $("#act").innerHTML = snap.empty ? `<div class="empty">No activity yet.</div>` :
+      `<table><tr><th style="width:165px">When</th><th style="width:110px">Event</th><th>Detail</th></tr>` +
+      snap.docs.map(d=>{const a=d.data();
+        const ts=a.ts&&a.ts.toDate? a.ts.toDate().toLocaleString():"";
+        return `<tr><td class="mono">${esc(ts)}</td><td class="mono">${esc(a.kind)}</td><td>${esc(a.detail)}</td></tr>`;}).join("")+`</table>`;
+  }));
+  $("#doImport").onclick = async ()=>{
+    const f = $("#csv").files[0]; if(!f) return toast("Choose a CSV first.");
+    const rows = parseCsv(await f.text());
+    if(!rows.length) return toast("No data rows found.");
+    toast(`Importing ${rows.length} rows…`);
+    const res = await call("importContacts")({rows}).catch(e=>({data:null,e}));
+    if(!res.data) return toast("Import failed: "+(res.e?.message||""));
+    toast(`Imported ${res.data.added} · dupes ${res.data.duplicates} · suppressed ${res.data.suppressed}`);
+    show("dashboard");
+  };
+  $("#doEnroll").onclick = async ()=>{
+    if(!confirm("Enroll every un-enrolled contact in ceu_intro?")) return;
+    const res = await call("enrollAll")({sequence:"ceu_intro"}).catch(e=>({data:null,e}));
+    if(!res.data) return toast("Enroll failed: "+(res.e?.message||""));
+    toast(`Enrolled ${res.data.enrolled} (already in: ${res.data.alreadyEnrolled})`);
+    show("dashboard");
+  };
+}
+
+function parseCsv(text){
+  const lines = text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
+  if(lines.length<2) return [];
+  const split=(l)=>{const out=[];let cur="",q=false;
+    for(const ch of l){ if(ch==='"'){q=!q;continue;}
+      if(ch===','&&!q){out.push(cur);cur="";} else cur+=ch; }
+    out.push(cur); return out;};
+  const alias={firstname:"first_name",first:"first_name",lastname:"last_name",
+    last:"last_name",company:"firm",organization:"firm",org:"firm",
+    title:"role","e-mail":"email",email_address:"email"};
+  const head = split(lines[0]).map(h=>{h=h.trim().toLowerCase().replace(/ /g,"_");
+    return alias[h]||h;});
+  return lines.slice(1).map(l=>{const vals=split(l);
+    return Object.fromEntries(head.map((h,i)=>[h,(vals[i]||"").trim()]));});
+}
+
+/* ---------------------------- approval queue ---------------------------- */
+function queue(){
+  $("#app").innerHTML = `<h1>Approval queue</h1>
+    <p class="note" style="margin-top:-8px">Every email waits here until you approve
+    it. What you approve is exactly what sends. Follow-ups go out inside the
+    original thread — a blank subject on touch 2+ is correct.</p><div id="list"></div>`;
+  unsub.push(onSnapshot(query(C("outreach_sends"), where("status","==","draft")), (snap)=>{
+    const list=$("#list"); if(!list) return;
+    if(snap.empty){ list.innerHTML=`<div class="empty">Queue is clear.</div>`; return; }
+    list.innerHTML="";
+    snap.docs.sort((a,b)=> (a.data().createdAt?.toMillis()||0)-(b.data().createdAt?.toMillis()||0));
+    for(const d of snap.docs){
+      const s=d.data();
+      const box=el(`<div class="draft">
+        <div class="who">${esc(s.contactName)} · ${esc(s.firm)}
+          <span class="tag">touch ${s.touch}</span><span class="tag">variant ${esc(s.variant)}</span>
+          <span class="mono" style="color:var(--muted);margin-left:6px">${esc(s.contactEmail)}</span></div>
+        <div style="margin-top:8px"><input type="text" class="subj"
+          value="${esc(s.subject)}" placeholder="(reply in thread — no subject needed)"></div>
+        <div style="margin-top:6px"><textarea class="body">${esc(s.bodyHtml)}</textarea></div>
+        <div style="margin-top:8px;display:flex;gap:10px">
+          <button class="btn blue ok">Approve &amp; queue to send</button>
+          <button class="btn quiet skip">Skip</button></div></div>`);
+      box.querySelector(".ok").onclick = async ()=>{
+        await updateDoc(d.ref,{status:"approved",
+          subject:box.querySelector(".subj").value,
+          bodyHtml:box.querySelector(".body").value});
+        toast("Approved — sends in the next open window.");
+      };
+      box.querySelector(".skip").onclick = async ()=>{
+        if(!confirm("Skip this touch for this contact?")) return;
+        await updateDoc(d.ref,{status:"skipped"}); toast("Skipped.");
+      };
+      list.append(box);
+    }
+  }));
+}
+
+/* ---------------------------- needs response ---------------------------- */
+function responses(){
+  $("#app").innerHTML = `<h1>Needs response</h1>
+    <p class="note" style="margin-top:-8px">Real replies. Their sequence is
+    already halted — answer from your own inbox, then clear the item. Mark
+    booked when a session lands so the funnel stays honest.</p><div id="list"></div>`;
+  unsub.push(onSnapshot(query(C("outreach_replies"),
+      where("classification","==","replied"), where("handled","==",false)), (snap)=>{
+    const list=$("#list"); if(!list) return;
+    if(snap.empty){ list.innerHTML=`<div class="empty">Nothing waiting. Good.</div>`; return; }
+    list.innerHTML="";
+    for(const d of snap.docs){
+      const r=d.data();
+      const box=el(`<div class="draft">
+        <div class="who">${esc(r.contactName||r.fromEmail)} · ${esc(r.firm||"")}
+          <span class="tag">replied after touch ${r.touchAtReply}</span>
+          <span class="mono" style="color:var(--muted);margin-left:6px">${esc(r.receivedAt||"")}</span></div>
+        <div style="margin:6px 0 2px"><b>${esc(r.subject)}</b></div>
+        <div style="color:var(--muted)">${esc(r.preview)}</div>
+        <div style="margin-top:9px;display:flex;gap:10px;align-items:center">
+          <input type="text" class="notes" placeholder="session notes (optional)" style="max-width:320px">
+          <button class="btn blue booked">Session booked</button>
+          <button class="btn quiet done">Handled, no meeting</button></div></div>`);
+      box.querySelector(".booked").onclick = async ()=>{
+        const enroll = await getDoc(doc(dbase,"outreach_enrollments",r.enrollmentId));
+        await addDoc(C("outreach_meetings"),{
+          contactId: enroll.exists()? enroll.data().contactId : null,
+          notes: box.querySelector(".notes").value,
+          kind:"lunch_and_learn", createdAt: serverTimestamp()});
+        await updateDoc(d.ref,{handled:true}); toast("Booked — congratulations.");
+      };
+      box.querySelector(".done").onclick = async ()=>{
+        await updateDoc(d.ref,{handled:true}); toast("Cleared.");
+      };
+      list.append(box);
+    }
+  }));
+}
+
+/* -------------------------------- reports ------------------------------- */
+async function reports(){
+  $("#app").innerHTML = `<h1>Activity report</h1>
+    <p class="note" style="margin-top:-8px">Window:
+      <a href="#" data-d="7">7 days</a> · <a href="#" data-d="30">30 days</a> ·
+      <a href="#" data-d="90">90 days</a> &nbsp;|&nbsp;
+      <a href="#" id="csvOut">Export CSV</a></p><div id="rep"></div>`;
+  $("#app").onclick=(e)=>{ if(e.target.dataset.d){e.preventDefault();render(+e.target.dataset.d);} };
+  let current;
+  async function render(days){
+    const since = new Date(Date.now()-days*86400000);
+    const sinceIso = since.toISOString();
+    const [sendsSnap, repliesSnap, enrollSnap, meetings] = await Promise.all([
+      getDocs(query(C("outreach_sends"), where("sentAt",">=",since))),
+      getDocs(query(C("outreach_replies"), where("receivedAt",">=",sinceIso))),
+      getDocs(C("outreach_enrollments")),
+      cnt(C("outreach_meetings")),
+    ]);
+    const sent = sendsSnap.docs.filter(d=>d.data().status==="sent");
+    const firsts = sent.filter(d=>d.data().touch===1).length;
+    const byCls = {}; repliesSnap.docs.forEach(d=>{
+      const c=d.data().classification; byCls[c]=(byCls[c]||0)+1;});
+    const replies = byCls.replied||0;
+    const variants={}, byTouch={};
+    let contacted=0, engaged=0;
+    enrollSnap.docs.forEach(d=>{const e=d.data();
+      if(e.currentTouch>0){contacted++;
+        const v=(variants[e.variant] ||= {n:0,r:0}); v.n++;
+        if(e.status==="replied") v.r++;}
+      if(e.status==="replied") engaged++;});
+    repliesSnap.docs.forEach(d=>{const r=d.data();
+      if(r.classification==="replied") byTouch[r.touchAtReply]=(byTouch[r.touchAtReply]||0)+1;});
+    const cfgSnap = await getDoc(doc(dbase,"outreach_settings/config"));
+    const goal = cfgSnap.exists()? (cfgSnap.data().sessionGoal||12):12;
+    current = {days, sent:sent.length, firsts, replies,
+      bounces:byCls.bounce||0, optOuts:byCls.opt_out||0,
+      rate: sent.length? (100*replies/sent.length).toFixed(1):"0.0",
+      contacted, engaged, booked:meetings, goal, variants, byTouch};
+    $("#rep").innerHTML = `
+      <div class="cards">
+        <div class="card"><div class="n">${current.sent}</div><div class="l">sent</div></div>
+        <div class="card"><div class="n">${firsts}</div><div class="l">new contacts reached</div></div>
+        <div class="card"><div class="n">${replies}</div><div class="l">replies</div></div>
+        <div class="card"><div class="n">${current.rate}%</div><div class="l">reply rate</div></div>
+        <div class="card"><div class="n">${current.bounces}</div><div class="l">bounces</div></div>
+        <div class="card"><div class="n">${current.optOuts}</div><div class="l">opt-outs</div></div>
+      </div>
+      <h2>Funnel · all-time vs goal</h2>
+      <table><tr><th>Contacted</th><th>Engaged (replied)</th><th>Booked</th><th>Goal</th></tr>
+      <tr class="mono"><td>${contacted}</td><td>${engaged}</td><td>${meetings}</td>
+      <td>${goal} by Sep 30</td></tr></table>
+      <h2>Variant performance</h2>
+      <table><tr><th>Variant</th><th>Touched</th><th>Replies</th><th>Rate</th></tr>
+      ${Object.entries(variants).map(([v,s])=>
+        `<tr class="mono"><td>${esc(v)}</td><td>${s.n}</td><td>${s.r}</td>
+         <td>${s.n?(100*s.r/s.n).toFixed(1):0}%</td></tr>`).join("")||"<tr><td colspan=4>—</td></tr>"}
+      </table>
+      <h2>Which touch earns the reply</h2>
+      <table><tr><th>Replied after touch</th><th>Count</th></tr>
+      ${Object.entries(byTouch).map(([t,c])=>
+        `<tr class="mono"><td>${esc(t)}</td><td>${c}</td></tr>`).join("")||"<tr><td colspan=2>—</td></tr>"}
+      </table>`;
+  }
+  $("#csvOut").onclick=(e)=>{e.preventDefault(); if(!current) return;
+    const r=current;
+    const rows=[["Prospect OS outreach report",`last ${r.days} days`],[],
+      ["sent",r.sent],["new_contacts",r.firsts],["replies",r.replies],
+      ["reply_rate_pct",r.rate],["bounces",r.bounces],["opt_outs",r.optOuts],[],
+      ["contacted",r.contacted],["engaged",r.engaged],["booked",r.booked],["goal",r.goal],[],
+      ["variant","touched","replies"],
+      ...Object.entries(r.variants).map(([v,s])=>[v,s.n,s.r]),[],
+      ["replied_after_touch","count"],
+      ...Object.entries(r.byTouch)];
+    const blob=new Blob([rows.map(x=>x.join(",")).join("\n")],{type:"text/csv"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download=`outreach-report-${r.days}d.csv`; a.click();};
+  render(7);
+}
+
+/* ------------------------------- settings ------------------------------- */
+async function settings(){
+  const ref = doc(dbase,"outreach_settings/config");
+  const snap = await getDoc(ref).catch(()=>null);
+  const c = snap && snap.exists()? snap.data() : {};
+  $("#app").innerHTML = `<h1>Settings</h1>
+    <div class="card">
+      <b>First-run order:</b> <span class="note">Seed defaults → enter Tenant/Client
+      IDs → Save → Connect mailbox → Import CSV → Enroll. Approval mode stays on
+      until the copy has earned auto-send.</span>
+      <div style="margin-top:10px"><button class="btn quiet" id="seed">Seed defaults</button></div>
+    </div>
+    <h2>Identity &amp; Microsoft</h2>
+    <div class="card row">
+      <label>Mailbox<input type="text" id="mailbox" value="${esc(c.mailbox||"")}"></label>
+      <label>Display name<input type="text" id="displayName" value="${esc(c.displayName||"")}"></label>
+      <label>Tenant ID<input type="text" id="tenantId" value="${esc(c.tenantId||"")}"></label>
+      <label>Client ID<input type="text" id="clientId" value="${esc(c.clientId||"")}"></label>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <button class="btn blue" id="connect">Connect mailbox</button>
+      <span class="note" id="authmsg" style="margin-left:10px"></span>
+    </div>
+    <h2>Guardrails</h2>
+    <div class="card row">
+      <label>New contacts/day<input type="number" id="dailyNewContactCap" value="${c.dailyNewContactCap??25}"></label>
+      <label>Total sends/day<input type="number" id="dailyTotalSendCap" value="${c.dailyTotalSendCap??60}"></label>
+      <label>Jitter (min)<input type="number" id="jitterMinutes" value="${c.jitterMinutes??25}"></label>
+      <label>Window start<input type="time" id="wstart" value="${esc(c.sendWindow?.start||"09:15")}"></label>
+      <label>Window end<input type="time" id="wend" value="${esc(c.sendWindow?.end||"16:45")}"></label>
+      <label>Approval mode
+        <select id="approvalMode" style="width:100%;padding:7px">
+          <option value="true" ${c.approvalMode!==false?"selected":""}>On — I approve every email</option>
+          <option value="false" ${c.approvalMode===false?"selected":""}>Off — auto-send</option>
+        </select></label>
+    </div>
+    <h2>Copy &amp; compliance</h2>
+    <div class="card row">
+      <label>Collateral link<input type="text" id="collateralLink" value="${esc(c.collateralLink||"")}"></label>
+      <label>Session goal<input type="number" id="sessionGoal" value="${c.sessionGoal??12}"></label>
+      <label style="flex-basis:100%">Opt-out line<input type="text" id="optOutLine" value="${esc(c.optOutLine||"")}"></label>
+      <label style="flex-basis:100%">Physical address<input type="text" id="physicalAddress" value="${esc(c.physicalAddress||"")}"></label>
+    </div>
+    <div style="margin-top:12px"><button class="btn blue" id="save">Save settings</button></div>
+    <p class="note">Sequence copy lives in Firestore → <span class="mono">outreach_sequences/ceu_intro</span>.
+    Edits apply to the next drafts automatically.</p>`;
+  $("#seed").onclick = async ()=>{
+    const r = await call("seedDefaults")().catch(e=>({e}));
+    toast(r.e? "Seed failed: "+r.e.message : "Defaults seeded — you own this system.");
+    if(!r.e) show("settings");
+  };
+  $("#save").onclick = async ()=>{
+    await updateDoc(ref,{
+      mailbox:$("#mailbox").value, displayName:$("#displayName").value,
+      tenantId:$("#tenantId").value.trim(), clientId:$("#clientId").value.trim(),
+      dailyNewContactCap:+$("#dailyNewContactCap").value,
+      dailyTotalSendCap:+$("#dailyTotalSendCap").value,
+      jitterMinutes:+$("#jitterMinutes").value,
+      "sendWindow.start":$("#wstart").value, "sendWindow.end":$("#wend").value,
+      approvalMode: $("#approvalMode").value==="true",
+      collateralLink:$("#collateralLink").value, sessionGoal:+$("#sessionGoal").value,
+      optOutLine:$("#optOutLine").value, physicalAddress:$("#physicalAddress").value,
+    }).catch(e=>toast("Save failed: "+e.message));
+    toast("Saved.");
+  };
+  $("#connect").onclick = async ()=>{
+    const msg=$("#authmsg");
+    msg.textContent="Starting Microsoft sign-in…";
+    const start = await call("msAuthStart")().catch(e=>({e}));
+    if(start.e){ msg.textContent="Failed: "+start.e.message; return; }
+    const {userCode, verificationUri} = start.data;
+    msg.innerHTML = `Go to <a href="${esc(verificationUri)}" target="_blank">${esc(verificationUri)}</a>
+      and enter code <b class="mono">${esc(userCode)}</b> — waiting…`;
+    const timer = setInterval(async ()=>{
+      const p = await call("msAuthPoll")().catch(e=>({data:{status:"error",message:e.message}}));
+      if(p.data.status==="connected"){ clearInterval(timer);
+        msg.textContent="Mailbox connected. The engine can now send as you."; toast("Mailbox connected."); }
+      else if(p.data.status==="error"){ clearInterval(timer);
+        msg.textContent="Sign-in failed: "+(p.data.message||""); }
+    }, 5000);
+  };
+}
+</script>
+</body>
+</html>
