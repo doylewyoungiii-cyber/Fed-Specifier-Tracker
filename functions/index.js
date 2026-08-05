@@ -740,6 +740,39 @@ exports.enrollAll = onCall(async (request) => {
   return { enrolled, alreadyEnrolled: existing.size, suppressed: skippedSupp };
 });
 
+exports.enrollOne = onCall(async (request) => {
+  const cfg = await requireOwner(request);
+  const contactId = request.data.contactId;
+  const sequence = request.data.sequence || "ceu_intro";
+  const contactSnap = await db.doc(`outreach_contacts/${contactId}`).get();
+  if (!contactSnap.exists) throw new HttpsError("not-found", "No such contact.");
+  const c = contactSnap.data();
+  if ((await db.doc(`outreach_suppression/${c.email}`).get()).exists) {
+    throw new HttpsError("failed-precondition", "Contact is on the suppression list.");
+  }
+  const existing = await db.collection("outreach_enrollments")
+    .where("contactId", "==", contactId).where("sequence", "==", sequence)
+    .limit(1).get();
+  if (!existing.empty) return { status: "already_enrolled" };
+  const seqSnap = await db.doc(`outreach_sequences/${sequence}`).get();
+  if (!seqSnap.exists) {
+    throw new HttpsError("not-found", `No sequence '${sequence}' — run Seed defaults first.`);
+  }
+  const variants = seqSnap.data().variants || ["A"];
+  const n = (await db.collection("outreach_enrollments")
+    .where("sequence", "==", sequence).count().get()).data().count;
+  const first = nextWindowOpen(cfg, new Date(Date.now() + Math.abs(jitterMs(cfg))));
+  await db.collection("outreach_enrollments").add({
+    contactId, sequence, status: "active", currentTouch: 0,
+    variant: variants[n % variants.length],
+    nextSendAt: Timestamp.fromDate(first),
+    contactName: `${c.firstName} ${c.lastName}`.trim(), firm: c.firm || "",
+    startedAt: FieldValue.serverTimestamp(),
+  });
+  await logEvent("enroll", `${c.email} \u2192 ${sequence}`);
+  return { status: "enrolled", firstSendAt: first.toISOString() };
+});
+
 /* --------------------- Microsoft device-code connect --------------------- */
 
 exports.msAuthStart = onCall(async (request) => {

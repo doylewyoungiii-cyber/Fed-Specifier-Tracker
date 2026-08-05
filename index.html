@@ -255,6 +255,8 @@ function renderNav(){
      if(k==="targets")n=`<span class="n">${S.firms.length}</span>`;
      return `<div class="item ${cur===k?"on":""}" onclick="location.hash='#/${k}'">
        <span class="t">${l}</span>${n}</div>`;}).join("")+
+   `<div class="item" onclick="location.href='outreach.html'" title="Automated CEU email outreach">
+       <span class="t">Outreach Engine</span><span class="n" style="background:var(--blue);color:#fff">&#9993;</span></div>`+
    `<div class="me"><b>Doyle W. Young III</b>Director, NA Channel Sales<br>
     <span class="muted">build ${BUILD}</span></div>`;
 }
